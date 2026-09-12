@@ -1,8 +1,14 @@
 [
-       {
-        "id": 1,
-        "task": "Put up picture in living room",
-        "completed": false,
-        "priority": "medium"
-        } 
+  {
+    "id": 1,
+    "task": "backup computer",
+    "completed": false,
+    "priority": "High"
+  },
+  {
+    "id": 2,
+    "task": "wash the car",
+    "completed": false,
+    "priority": "low"
+  }
 ]
