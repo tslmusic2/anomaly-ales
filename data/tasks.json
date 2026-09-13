@@ -7,8 +7,8 @@
   },
   {
     "id": 2,
-    "task": "wash the car",
+    "task": "Clean inside the car",
     "completed": false,
-    "priority": "low"
+    "priority": "High"
   }
 ]
