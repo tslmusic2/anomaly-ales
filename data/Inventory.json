@@ -1,14 +1,56 @@
 [
   {
     "id": 1,
-    "task": "backup computer",
-    "completed": false,
-    "priority": "High"
+    "name": "Coastal IPA",
+    "style": "IPA",
+    "abv": 6.5,
+    "packageType": "6-pack",
+    "quantity": 24,
+    "price": 11.99
   },
   {
     "id": 2,
-    "task": "Clean inside the car",
-    "completed": false,
-    "priority": "High"
+    "name": "The Hulk",
+    "style": "Double IPA",
+    "abv": 8.5,
+    "packageType": "6-pack",
+    "quantity": 14,
+    "price": 16.00
+  },
+  {
+    "id": 3,
+    "name": "Lowcountry Lager",
+    "style": "Helles Lager",
+    "abv": 4.8,
+    "packageType": "6-pack",
+    "quantity": 40,
+    "price": 10.99
+  },
+  {
+    "id": 4,
+    "name": "Baseys Brew",
+    "style": "Coffee Blonde",
+    "abv": 6,
+    "packageType": "6-pack",
+    "quantity": 18,
+    "price": 12.50
+  },
+  {
+    "id": 5,
+    "name": "Pauls Pale Ale",
+    "style": "Pale Ale",
+    "abv": 5.2,
+    "packageType": "6-pack",
+    "quantity": 20,
+    "price": 10.99
+  },
+  {
+    "id": 6,
+    "name": "Bunsons Belgian Ale",
+    "style": "Belgian Blonde",
+    "abv": 6.5,
+    "packageType": "6-pack",
+    "quantity": 12,
+    "price": 13.00
   }
 ]

@@ -1,0 +1,20 @@
+{
+  "name": "anomaly-ales",
+  "version": "1.0.0",
+  "description": "Brewery website and online store",
+  "homepage": "https://github.com/tslmusic2/anomaly-ales#readme",
+  "bugs": {
+    "url": "https://github.com/tslmusic2/anomaly-ales/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tslmusic2/anomaly-ales.git"
+  },
+  "license": "ISC",
+  "author": "tslmusic2",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
