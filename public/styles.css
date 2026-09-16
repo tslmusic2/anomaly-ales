@@ -1,12 +1,1 @@
 
-
-
-
-.form {
-        display: flex;
-        flex-direction: column;
-        gap: 1em;
-        border: 2px solid black;
-        margin: 2em;
-        padding: 1em;
-}
