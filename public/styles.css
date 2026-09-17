@@ -1,1 +1,25 @@
+* {
+        box-sizing: border-box;
+}
 
+body {
+        margin: 0;
+        padding: 0;
+        background-color: red;
+        color: white;
+        /*  
+        !!!!!!font-style: oblique 10deg; can maybe give my
+        font the lean im looking for
+
+        Excellent font for big bold text/headers
+        font-family: "Alfa Slab One", serif;
+
+        Potential for Logo and headers
+        font-family: "Raleway", sans-serif;
+        font-family: "Arvo", serif;
+        font-family: "Roboto Slab", serif; weight 500-700
+
+
+        Good <p> text font
+        font-family: "Jost", sans-serif;*/
+}
