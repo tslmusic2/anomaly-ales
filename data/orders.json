@@ -1,3 +1,32 @@
 [
-        
+  {
+    "id": 1,
+    "items": [
+      {
+        "id": 1,
+        "name": "Coastal IPA",
+        "packageType": "6-pack",
+        "quantity": 1,
+        "price": 11.99,
+        "itemTotal": 11.99
+      },
+      {
+        "id": 2,
+        "name": "The Hulk",
+        "packageType": "6-pack",
+        "quantity": 1,
+        "price": 16,
+        "itemTotal": 16
+      },
+      {
+        "id": 3,
+        "name": "Lowcountry Lager",
+        "packageType": "6-pack",
+        "quantity": 1,
+        "price": 10.99,
+        "itemTotal": 10.99
+      }
+    ],
+    "price": 38.99
+  }
 ]

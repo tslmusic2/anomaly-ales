@@ -8,8 +8,8 @@ import { getRequestBody } from './utilities/getRequestBody.js'
 const PORT = 8004
 
 const __dirname = import.meta.dirname
-const inventoryFilePath = path.join(__dirname, 'data', 'inventory.js')
-const ordersFilePath = path.join(__dirname, 'data', 'orders.js')
+const inventoryFilePath = path.join(__dirname, 'data', 'inventory.json')
+const ordersFilePath = path.join(__dirname, 'data', 'orders.json')
 
 const server = http.createServer(async (req, res) => {
       //Here so this works on my local network----------
@@ -85,7 +85,7 @@ const server = http.createServer(async (req, res) => {
 			}
 
 			let priceTotal = 0
-			orderedItems = []
+			const orderedItems = []
 
 			//Find product in inventory then adjust its inventory and check price
 			for (const orderedItem of parsedreqBody.items) {
@@ -124,13 +124,13 @@ const server = http.createServer(async (req, res) => {
 			const newOrder = {
 				id: newOrderId,
 				items: orderedItems,
-				price: priceTotal
+				price: Math.round(priceTotal * 100) / 100
 			}
 
 			parsedOrdersFile.push(newOrder)
-			await fs.writeFile(parsedOrdersFile, 'utf8')
+			await fs.writeFile(ordersFilePath, JSON.stringify(parsedOrdersFile, null, 2), 'utf8')
 
-			await fs.writeFile(parsedInventoryFile, 'utf8')
+			await fs.writeFile(inventoryFilePath, JSON.stringify(parsedInventoryFile, null, 2), 'utf8')
 
 			return sendResponse(
 				res,

@@ -2,11 +2,17 @@
         box-sizing: border-box;
 }
 
+:root {
+        --richred: rgb(152, 8, 8);
+        --text-color: rgb(243, 243, 243);
+        --accent-black: black;
+}
+
 body {
         margin: 0;
         padding: 0;
-        background-color: red;
-        color: white;
+        background-color: var(--richred);
+        color: var(--text-color);
         /*  
         !!!!!!font-style: oblique 10deg; can maybe give my
         font the lean im looking for
@@ -23,3 +29,51 @@ body {
         Good <p> text font
         font-family: "Jost", sans-serif;*/
 }
+
+
+
+
+/*======TYPOGRAPHY======*/
+
+
+
+
+
+.nav-list {
+        list-style: none;
+        display: flex;
+        gap: 2em;
+        font-size: 1.25rem;
+        align-items: center;
+        border-bottom: 3px solid var(--accent-black);
+}
+
+.nav-list-item-logo {
+        margin-right: auto;
+}
+
+.nav-link {
+        color: var(--text-color);
+        text-decoration: none;
+}
+
+.nav-link:hover,
+.nav-link:focus {
+        color: var(--accent-black);
+        
+}
+
+.nav-link-logo {
+        font-size: 2rem;
+}
+
+.logo-span {
+        font-style: oblique 10deg;
+        font-weight: 700;
+}
+
+.logo-span-l {
+        font-style: italic;
+}
+
+/*----*/

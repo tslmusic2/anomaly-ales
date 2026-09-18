@@ -5,7 +5,7 @@
     "style": "IPA",
     "abv": 6.5,
     "packageType": "6-pack",
-    "quantity": 24,
+    "quantity": 23,
     "price": 11.99
   },
   {
@@ -14,8 +14,8 @@
     "style": "Double IPA",
     "abv": 8.5,
     "packageType": "6-pack",
-    "quantity": 14,
-    "price": 16.00
+    "quantity": 13,
+    "price": 16
   },
   {
     "id": 3,
@@ -23,7 +23,7 @@
     "style": "Helles Lager",
     "abv": 4.8,
     "packageType": "6-pack",
-    "quantity": 40,
+    "quantity": 39,
     "price": 10.99
   },
   {
@@ -33,7 +33,7 @@
     "abv": 6,
     "packageType": "6-pack",
     "quantity": 18,
-    "price": 12.50
+    "price": 12.5
   },
   {
     "id": 5,
@@ -51,6 +51,6 @@
     "abv": 6.5,
     "packageType": "6-pack",
     "quantity": 12,
-    "price": 13.00
+    "price": 13
   }
 ]
