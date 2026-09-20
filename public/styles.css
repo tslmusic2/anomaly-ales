@@ -3,8 +3,8 @@
 }
 
 :root {
-        --richred: rgb(152, 8, 8);
-        --text-color: rgb(243, 243, 243);
+        --richred: #991B1B;
+        --text-color: #FFF7ED ;
         --accent-black: black;
 }
 

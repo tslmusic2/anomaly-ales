@@ -63,7 +63,7 @@ const server = http.createServer(async (req, res) => {
 						JSON.stringify({error: 'Item does not exist'})
 					)
 				}
-				//see if amount ordered is more than 0
+				//see if there is a valid quantity for the product ordered
 				if (orderedItem.quantity <= 0) {
 					return sendResponse(
 						res,
@@ -119,7 +119,7 @@ const server = http.createServer(async (req, res) => {
 			const parsedOrdersFile = JSON.parse(ordersFile)
 
 			const newOrderId = parsedOrdersFile.length > 0 ?
-				Math.max(...parsedOrdersFile.length.map(order => order.id)) + 1 : 1
+				Math.max(...parsedOrdersFile.map(order => order.id)) + 1 : 1
 
 			const newOrder = {
 				id: newOrderId,
@@ -143,8 +143,33 @@ const server = http.createServer(async (req, res) => {
 			
 		}
 
-		if (req.url === '/api/inventory' && req.method === 'DELETE') {
+		if (req.url.startsWith('/api/inventory') && req.method === 'DELETE') {
 
+			const id = Number(req.url.split('/').pop())
+	
+			const inventoryFile = await fs.readFile(inventoryFilePath, 'utf8')
+			const parsedInventoryFile = JSON.parse(inventoryFile)	
+
+			const updatedParsedInventoryFile = parsedInventoryFile.filter(
+				item => item.id !== id)
+
+			if (parsedInventoryFile.length === updatedParsedInventoryFile.length) {
+				return sendResponse(
+						res,
+						404,
+						'application/json',
+						JSON.stringify({message: 'ID not found' })	
+				)
+			}
+
+			await fs.writeFile(inventoryFilePath, JSON.stringify(updatedParsedInventoryFile, null, 2), 'utf8')
+
+			return sendResponse(
+				res,
+				200,
+				'application/json',
+				JSON.stringify({message: 'Product deleted successfully'})
+			)
 
 		}
 

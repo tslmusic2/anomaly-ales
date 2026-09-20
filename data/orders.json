@@ -28,5 +28,35 @@
       }
     ],
     "price": 38.99
+  },
+  {
+    "id": 2,
+    "items": [
+      {
+        "id": 1,
+        "name": "Coastal IPA",
+        "packageType": "6-pack",
+        "quantity": 1,
+        "price": 11.99,
+        "itemTotal": 11.99
+      },
+      {
+        "id": 4,
+        "name": "Baseys Brew",
+        "packageType": "6-pack",
+        "quantity": 2,
+        "price": 12.5,
+        "itemTotal": 25
+      },
+      {
+        "id": 6,
+        "name": "Bunsons Belgian Ale",
+        "packageType": "6-pack",
+        "quantity": 1,
+        "price": 13,
+        "itemTotal": 13
+      }
+    ],
+    "price": 49.99
   }
 ]

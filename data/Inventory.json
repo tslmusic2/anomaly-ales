@@ -5,7 +5,7 @@
     "style": "IPA",
     "abv": 6.5,
     "packageType": "6-pack",
-    "quantity": 23,
+    "quantity": 22,
     "price": 11.99
   },
   {
@@ -32,7 +32,7 @@
     "style": "Coffee Blonde",
     "abv": 6,
     "packageType": "6-pack",
-    "quantity": 18,
+    "quantity": 16,
     "price": 12.5
   },
   {
@@ -50,7 +50,7 @@
     "style": "Belgian Blonde",
     "abv": 6.5,
     "packageType": "6-pack",
-    "quantity": 12,
+    "quantity": 11,
     "price": 13
   }
 ]
