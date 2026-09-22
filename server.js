@@ -1,6 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import http from 'node:http'
+import { pool } from './utilities/database.js'
 import { sendResponse } from './utilities/sendResponse.js'
 import { getRequestBody } from './utilities/getRequestBody.js'
 
@@ -10,6 +11,13 @@ const PORT = 8004
 const __dirname = import.meta.dirname
 const inventoryFilePath = path.join(__dirname, 'data', 'inventory.json')
 const ordersFilePath = path.join(__dirname, 'data', 'orders.json')
+
+
+const result = await pool.query(
+    'SELECT current_database() AS database_name'
+)
+
+console.log('Connected to database:', result.rows[0].database_name)
 
 const server = http.createServer(async (req, res) => {
       //Here so this works on my local network----------
