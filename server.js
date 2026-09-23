@@ -17,6 +17,12 @@ const result = await pool.query(
     'SELECT current_database() AS database_name'
 )
 
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY
+
+if (!ADMIN_API_KEY) {
+    throw new Error('ADMIN_API_KEY is missing')
+}
+
 console.log('Connected to database:', result.rows[0].database_name)
 
 const server = http.createServer(async (req, res) => {
@@ -36,14 +42,20 @@ const server = http.createServer(async (req, res) => {
 
 		if (req.url === '/api/inventory' && req.method === 'GET') {
 
-			const inventoryFile = await fs.readFile(inventoryFilePath, 'utf8')
-			const parsedInventoryFile = JSON.parse(inventoryFile)
+			const result = await pool.query(
+				`SELECT id,product_type,img_url,
+					name,beer_style,abv,packaging_type,
+					size,unit_price
+					FROM inventory;`
+			)
+
+			const inventory = result.rows
 
 			return sendResponse(
 				res,
 				200,
 				'application/json',
-				JSON.stringify(parsedInventoryFile)
+				JSON.stringify(inventory)
 			)
 		}
 
@@ -151,26 +163,65 @@ const server = http.createServer(async (req, res) => {
 			
 		}
 
+
+
 		if (req.url.startsWith('/api/inventory') && req.method === 'DELETE') {
 
-			const id = Number(req.url.split('/').pop())
-	
-			const inventoryFile = await fs.readFile(inventoryFilePath, 'utf8')
-			const parsedInventoryFile = JSON.parse(inventoryFile)	
-
-			const updatedParsedInventoryFile = parsedInventoryFile.filter(
-				item => item.id !== id)
-
-			if (parsedInventoryFile.length === updatedParsedInventoryFile.length) {
+			//----------------------------------------------------------//
+			if (!ADMIN_API_KEY || req.headers['x-admin-key'] !== ADMIN_API_KEY) {
 				return sendResponse(
+				res,
+				403,
+				'application/json',
+				JSON.stringify({ message: 'Admin access required' })
+				)
+			}
+			//----------------------------------------------------------//
+
+			const id = Number(req.url.split('/').pop())
+
+			if (!Number.isInteger(id) || id <= 0) {
+				return sendResponse(
+					res,
+					400,
+					'application/json',
+					JSON.stringify({ message: 'ID must be a positive integer' })
+				)
+			}
+	
+			let result
+
+			try {
+				//result will tell us how many rows were deleted
+				result = await pool.query(`
+					DELETE FROM inventory
+						WHERE id = $1;`, [id]
+					)
+
+			} catch (err) {
+				if (err.code === '23503') {
+					return sendResponse(
 						res,
-						404,
+						409,
 						'application/json',
-						JSON.stringify({message: 'ID not found' })	
+						JSON.stringify({message: 'This product is referenced by an order and cannot be deleted.'})
+					)
+				}
+
+				throw err
+			}
+
+
+			
+			if(result.rowCount === 0 ) {
+				return sendResponse(
+					res,
+					404,
+					'application/json',
+					JSON.stringify({ message: 'ID not found' })
 				)
 			}
 
-			await fs.writeFile(inventoryFilePath, JSON.stringify(updatedParsedInventoryFile, null, 2), 'utf8')
 
 			return sendResponse(
 				res,
@@ -180,6 +231,13 @@ const server = http.createServer(async (req, res) => {
 			)
 
 		}
+
+		return sendResponse(
+			res,
+			404,
+			'application/json',
+			JSON.stringify({ message: 'Route not found' })
+			)
 
  
 		
