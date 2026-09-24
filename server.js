@@ -60,7 +60,7 @@ const server = http.createServer(async (req, res) => {
 		}
 
 
-
+		//------------------------------POST Handler-------------------------//
 		if (req.url === '/api/orders' && req.method === 'POST') {
 
 			const parsedreqBody = await getRequestBody(req)
@@ -164,6 +164,82 @@ const server = http.createServer(async (req, res) => {
 		}
 
 
+		//------------------------------PATCH Handler-------------------------//
+		if (req.url.startsWith('/api/inventory') && req.method === 'PATCH') {
+
+			//----------------------------------------------------------//
+			if (!ADMIN_API_KEY || req.headers['x-admin-key'] !== ADMIN_API_KEY) {
+				return sendResponse(
+				res,
+				403,
+				'application/json',
+				JSON.stringify({ message: 'Admin access required' })
+				)
+			}
+			//----------------------------------------------------------//
+
+
+			const id = Number(req.url.split('/').pop())
+
+			if (!Number.isInteger(id) || id <= 0 || id > 2147483647) {
+				return sendResponse(
+					res,
+					400,
+					'application/json',
+					JSON.stringify({ message: 'ID must be a positive integer' })
+				)
+			}
+
+
+			const parsedReqBody = await getRequestBody(req)
+
+
+			const allowedFields = ['product_type', 'img_url', 'name', 'beer_style', 'abv', 'packaging_type', 'size', 'quantity', 'unit_price', 'is_active']
+			
+
+			const reqBodyArr = Object.keys(parsedReqBody)
+
+			//!!!!!!!!!!!!!NEED TO FIX THIS VALIDATION SECTION!!!!!!!!!!!!!!
+			if (!allowedFields.includes(reqBodyArr.key) || reqBodyArr.some(key => key != allowedFields.value)) {
+				return sendResponse(
+					res,
+					400,
+					'application/json',
+					JSON.stringify({ message: 'Invalid entry' })
+				)
+			}
+
+			
+
+			
+			try {
+
+				const result = await pool.query(`
+					UPDATE quantity FROM inventory
+						WHERE quantity = $1
+					`)
+
+			} catch (err) {
+				if (err.code === '23503') {
+					return sendResponse(
+						res,
+						409,
+						'application/json',
+						JSON.stringify({message: 'This product is referenced by an order and cannot be deleted.'})
+					)
+				}
+
+				throw err
+			}
+
+
+		}
+
+
+
+
+
+		//------------------------------DELETE Handler-------------------------//
 
 		if (req.url.startsWith('/api/inventory') && req.method === 'DELETE') {
 
