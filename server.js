@@ -2,7 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import http from 'node:http'
 import { pool } from './utilities/database.js'
-import { sendResponse } from './utilities/sendResponse.js'
+import { sendResponse, sendJson } from './utilities/responses.js'
 import { getRequestBody } from './utilities/getRequestBody.js'
 
 
@@ -60,50 +60,119 @@ const server = http.createServer(async (req, res) => {
 		}
 
 
-		//------------------------------POST Handler-------------------------//
+//------------------------------POST Handler------------------------------------------------//
 		if (req.url === '/api/orders' && req.method === 'POST') {
 
-			const parsedreqBody = await getRequestBody(req)
 
-			const inventoryFile = await fs.readFile(inventoryFilePath, 'utf8')
-			const parsedInventoryFile = JSON.parse(inventoryFile)
+			//This section makes sure the request itself is valid 
+			let parsedReqBody
+			try {
 
+				parsedReqBody = await getRequestBody(req)
 
-			//Find ordered product ids then find product in inventory
-			for (const orderedItem of parsedreqBody.items) {
-				const product = parsedInventoryFile.find(
-					product => product.id === orderedItem.id
-				)
-
-				if(!product) {
-					return sendResponse(
-						res,
-						404,
-						'application/json',
-						JSON.stringify({error: 'Item does not exist'})
-					)
-				}
-				//see if there is a valid quantity for the product ordered
-				if (orderedItem.quantity <= 0) {
-					return sendResponse(
-						res,
-						400,
-						'application/json',
-						JSON.stringify({error: 'Invalid quantity'})
-					)
+			
+				if (parsedReqBody === null || typeof parsedReqBody !== 'object' || Array.isArray(parsedReqBody)) {
+					return sendJson(res, 400, {message: 'Request body must be a JSON object'})
 				}
 
-				//see if amount ordered is in stock
-				if (product.quantity < orderedItem.quantity) {
-					return sendResponse(
-						res,
-						409,
-						'application/json',
-						JSON.stringify({error: 'There was an error with the server'})
-					)
-				} 	
+				if (!Array.isArray(parsedReqBody.items) || parsedReqBody.items.length === 0) {
+					return sendJson(res, 400, {message: 'Order must contain a nonempty items array'})
+				}
+
+			} catch(err) {
+				if (err instanceof SyntaxError) {
+					return sendJson(res, 400, {error: 'Order must be valid JSON'})
+				}
+
+				throw err
 			}
 
+
+			//This section makes sure the ordered items are in fact valid
+			const seenIds = new Set()
+			for (const orderedItem of parsedReqBody.items) {
+				
+				//validate the ordered items a non null object
+				if (typeof orderedItem !== 'object' || orderedItem === null|| Array.isArray(orderedItem)) {
+					return sendJson(res, 400, {message: 'each order item must be a non null object'})
+				}
+
+				//validate the id
+				if (!Number.isInteger(orderedItem.id) || orderedItem.id <= 0 || orderedItem.id > 2147483647) {
+					return sendJson(res, 400, { message: 'id must be an integer between 1 and 2147483647' })
+				}
+
+
+
+				//validate the quantity
+				if (!Number.isInteger(orderedItem.quantity) || orderedItem.quantity <= 0 || orderedItem.quantity > 2147483647) {
+					return sendJson(res, 400, { message: 'Quantity must be an integer between 1 and 2147483647' })
+				}
+
+				//validate the id is not a duplicate
+				if (seenIds.has(orderedItem.id)) {
+					return sendJson(res, 400, { message: 'Each product ID must appear only once; combine its quantities into one item' })
+				}
+
+				seenIds.add(orderedItem.id)
+
+			}
+
+
+			//-----------SQL Section-----------------------------
+			const client = await pool.connect()
+
+			try {
+
+				//Check there is enough inventory to fill the order
+				client.query(`
+					SELECT quantity FROM inventory
+						WHERE id = $1
+					`)
+				/*if (is--- < parsedReqBody.quantity) {
+					//return sendJson(res, 400, { message: 'Insufficient inventory' })
+				}*/
+
+				//If inventorys good  update the inventory
+				client.query(`
+					UPDATE inventory
+					SET quantity - $1
+						WHERE id = $1;
+					`)
+
+				//add order info to orders table
+				client.query(`
+					INSERT INTO orders (
+						order_date, order_status, order_items 
+					) VALUES (
+					 	TIMESTAMPTZ, 'pending', parsedReqBody.items
+					);
+					`)
+
+				//Add ordered items to ordered_items table
+				client.query(`
+					SELECT quantity FROM inventory
+						WHERE id = $1
+					`)
+
+			} catch(err) {
+
+				throw err
+
+			} finally {
+
+				client.release()
+			}
+			
+
+
+
+
+
+
+
+
+/*
 			let priceTotal = 0
 			const orderedItems = []
 
@@ -134,7 +203,7 @@ const server = http.createServer(async (req, res) => {
 				})
 
 			}
-
+*/
 			const ordersFile = await fs.readFile(ordersFilePath, 'utf8')
 			const parsedOrdersFile = JSON.parse(ordersFile)
 
@@ -164,7 +233,7 @@ const server = http.createServer(async (req, res) => {
 		}
 
 
-		//------------------------------PATCH Handler-------------------------//
+//--------------------------------------PATCH Handler----------------------------------------------------------------//
 		if (req.url.startsWith('/api/inventory') && req.method === 'PATCH') {
 
 			//----------------------------------------------------------//
@@ -354,8 +423,8 @@ const server = http.createServer(async (req, res) => {
 				}
 			}
 
-//--------------------SQL query code HERE----------------------//
 
+		//--------------------SQL query code HERE----------------------//
 
 			const assignments = reqBodyArr.map((field,index) => `${field} = $${index + 1}`)
 
@@ -395,7 +464,7 @@ const server = http.createServer(async (req, res) => {
 
 
 
-		//------------------------------DELETE Handler-------------------------//
+		//------------------------------DELETE Handler------------------------------------------------------------------//
 
 		if (req.url.startsWith('/api/inventory') && req.method === 'DELETE') {
 
@@ -455,32 +524,16 @@ const server = http.createServer(async (req, res) => {
 			}
 
 
-			return sendResponse(
-				res,
-				200,
-				'application/json',
-				JSON.stringify({message: 'Product deleted successfully'})
-			)
+			return sendJson(res, 200, {message: 'Product deleted successfully'})
 
 		}
 
-		return sendResponse(
-			res,
-			404,
-			'application/json',
-			JSON.stringify({ message: 'Route not found' })
-			)
+		return sendJson(res, 404, { message: 'Route not found' })
 
- 
 		
 	}  catch (err) {
 		console.log(err) 
-		sendResponse(
-			res,
-			500,
-			'application/json',
-			JSON.stringify({message: 'Internal Server Error'})
-		)
+		return sendJson(res, 500, {message: 'Internal Server Error'})
 	}
 
 
