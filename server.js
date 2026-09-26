@@ -81,7 +81,7 @@ const server = http.createServer(async (req, res) => {
 
 			} catch(err) {
 				if (err instanceof SyntaxError) {
-					return sendJson(res, 400, {error: 'Order must be valid JSON'})
+					return sendJson(res, 400, {message: 'Order must be valid JSON'})
 				}
 
 				throw err
@@ -119,118 +119,126 @@ const server = http.createServer(async (req, res) => {
 			}
 
 
-			//-----------SQL Section-----------------------------
+			//-----------SQL Section---------------------------------------------------
 			const client = await pool.connect()
 
 			try {
 
-				//Check there is enough inventory to fill the order
-				client.query(`
-					SELECT quantity FROM inventory
-						WHERE id = $1
-					`)
-				/*if (is--- < parsedReqBody.quantity) {
-					//return sendJson(res, 400, { message: 'Insufficient inventory' })
-				}*/
+				await client.query('BEGIN')
 
-				//If inventorys good  update the inventory
-				client.query(`
-					UPDATE inventory
-					SET quantity - $1
-						WHERE id = $1;
-					`)
+				const inventoryIds = parsedReqBody.items.map(item => item.id)
+
+				const inventoryResults = await client.query(`
+					SELECT id, name, size, packaging_type, quantity, unit_price, is_active
+					FROM inventory
+						WHERE id = ANY($1::integer[])
+					ORDER BY id
+					FOR UPDATE 
+					`, [inventoryIds])
+					//$1 is our first parameter.
+					//::integer[] tells PostgreSQL to treat it as an array of integers.
+					//ANY(...) checks for a match against any member of that array.
+					//FOR UPDATE -- locks in the items row so noone else can order/alter it until this transaction finishes!!
+
+				const inventory = inventoryResults.rows
+
+				if (inventory.length !== inventoryIds.length) {
+					await client.query('ROLLBACK')
+					return sendJson(res, 404, {message: 'One or more requested products do not exist'})
+				}
+
+
+				//checking active status and available stock
+				for (const orderItem of parsedReqBody.items) { 
+					const inventoryItem = inventory.find(item => item.id === orderItem.id)
+
+					if(!inventoryItem.is_active) {
+						await client.query('ROLLBACK')
+						return sendJson(res, 409, {message: 'An order item is currently inactive'})
+					}
+
+					if(inventoryItem.quantity < orderItem.quantity) {
+						await client.query('ROLLBACK')
+						return sendJson(res, 409, {message: 'Not enough stock to fulfill order'})
+					}
+				}
+
+
 
 				//add order info to orders table
-				client.query(`
-					INSERT INTO orders (
-						order_date, order_status, order_items 
-					) VALUES (
-					 	TIMESTAMPTZ, 'pending', parsedReqBody.items
-					);
+				const orderResult = await client.query(`
+					INSERT INTO orders DEFAULT VALUES
+					RETURNING id, order_date, order_status; 
 					`)
 
+				const newOrder = orderResult.rows[0]
+
+				
+				
 				//Add ordered items to ordered_items table
-				client.query(`
-					SELECT quantity FROM inventory
-						WHERE id = $1
+				for (const orderItem of parsedReqBody.items) {
+					const inventoryItem = inventory.find(item => item.id === orderItem.id)
+	
+					await client.query(`
+						INSERT INTO order_items (
+							order_id, inventory_id, item_name, selected_size, packaging_type, quantity, unit_price 
+						) VALUES (
+							$1, $2, $3, $4, $5, $6, $7
+						);
+						`, [
+							newOrder.id, 
+							inventoryItem.id, 
+							inventoryItem.name, 
+							inventoryItem.size,
+							inventoryItem.packaging_type, 
+							orderItem.quantity,
+							inventoryItem.unit_price
+							]
+						)
+
+				//update the inventory
+						await client.query(`
+							UPDATE inventory
+							SET quantity = quantity - $1
+								WHERE id = $2;
+							`, [orderItem.quantity, inventoryItem.id])
+
+				}
+
+				//gets the saved order items
+				const orderItemsResult = await client.query(`
+					SELECT inventory_id, item_name, selected_size, packaging_type, quantity, unit_price, quantity * unit_price AS item_total
+					FROM order_items
+						WHERE order_id = $1;
+						ORDER BY id
+					`, [newOrder.id])
+
+				const orderItems = orderItemsResult.rows
+
+				//gets the order total
+				const orderTotal = await client.query(`
+					SELECT SUM()
 					`)
+
+
+				await client.query('COMMIT')
+
+				return sendJson(res, 201, {message: 'Order was created successfully', order: finalOrder})
 
 			} catch(err) {
-
+				await client.query('ROLLBACK')
 				throw err
 
 			} finally {
 
 				client.release()
 			}
-			
 
-
-
-
-
-
-
-
-/*
-			let priceTotal = 0
-			const orderedItems = []
-
-			//Find product in inventory then adjust its inventory and check price
-			for (const orderedItem of parsedreqBody.items) {
-				const product = parsedInventoryFile.find(
-					product => product.id === orderedItem.id
-				)
-
-
-				//subtract the order quantity from quantity
-				product.quantity -= orderedItem.quantity
-
-				// Calculate this item's total
-				const itemTotal = product.price * orderedItem.quantity
-
-				//Add it to the entire order total
-				priceTotal += itemTotal
-
-
-				orderedItems.push({
-					id: product.id,
-					name: product.name,
-					packageType: product.packageType,
-					quantity: orderedItem.quantity,
-					price: product.price,
-					itemTotal: itemTotal
-				})
-
-			}
-*/
-			const ordersFile = await fs.readFile(ordersFilePath, 'utf8')
-			const parsedOrdersFile = JSON.parse(ordersFile)
-
-			const newOrderId = parsedOrdersFile.length > 0 ?
-				Math.max(...parsedOrdersFile.map(order => order.id)) + 1 : 1
-
-			const newOrder = {
-				id: newOrderId,
-				items: orderedItems,
-				price: Math.round(priceTotal * 100) / 100
-			}
-
-			parsedOrdersFile.push(newOrder)
-			await fs.writeFile(ordersFilePath, JSON.stringify(parsedOrdersFile, null, 2), 'utf8')
-
-			await fs.writeFile(inventoryFilePath, JSON.stringify(parsedInventoryFile, null, 2), 'utf8')
-
-			return sendResponse(
-				res,
-				201,
-				'application/json',
-				JSON.stringify({ 
-					message: 'Order created successfully', order: newOrder})
-			)
+		}	
+//------------------------------------END----------------------------------------------------------------------------//	
 
 			
-		}
+		
 
 
 //--------------------------------------PATCH Handler----------------------------------------------------------------//
@@ -238,12 +246,7 @@ const server = http.createServer(async (req, res) => {
 
 			//----------------------------------------------------------//
 			if (!ADMIN_API_KEY || req.headers['x-admin-key'] !== ADMIN_API_KEY) {
-				return sendResponse(
-				res,
-				403,
-				'application/json',
-				JSON.stringify({ message: 'Admin access required' })
-				)
+				return sendJson(res, 403, { message: 'Admin access required' })
 			}
 			//----------------------------------------------------------//
 
@@ -251,12 +254,7 @@ const server = http.createServer(async (req, res) => {
 			const id = Number(req.url.split('/').pop())
 
 			if (!Number.isInteger(id) || id <= 0 || id > 2147483647) {
-				return sendResponse(
-					res,
-					400,
-					'application/json',
-					JSON.stringify({ message: 'ID must be a positive integer' })
-				)
+				return sendJson(res, 400, { message: 'ID must be a positive integer' })
 			}
 
 
@@ -267,12 +265,7 @@ const server = http.createServer(async (req, res) => {
 			
 			//Reject null, non-object values, and arrays.
 			if ( parsedReqBody === null || typeof parsedReqBody !== 'object' || Array.isArray(parsedReqBody)) {
-				return sendResponse(
-					res,
-					400,
-					'application/json',
-					JSON.stringify({ message: 'Request body must be a JSON object' })
-				)
+				return sendJson(res, 400, { message: 'Request body must be a JSON object' })
 			}
 
 			//Gets the keys out of the parsedReq array into an array of strings
@@ -280,12 +273,7 @@ const server = http.createServer(async (req, res) => {
 			const reqBodyArr = Object.keys(parsedReqBody)
 
 			if (reqBodyArr.length === 0) {
-				return sendResponse(
-					res,
-					400,
-					'application/json',
-					JSON.stringify({ message: 'Provide at least one field to update' })
-				)
+				return sendJson(res, 400, { message: 'Provide at least one field to update' })
 			}
 
 
@@ -293,12 +281,7 @@ const server = http.createServer(async (req, res) => {
 			const hasInvalidField = reqBodyArr.some(field => !allowedFields.includes(field))
 
 			if (hasInvalidField) {
-				return sendResponse(
-					res,
-					400,
-					'application/json',
-					JSON.stringify({ message: 'Invalid entry' })
-				)
+				return sendJson(res, 400, { message: 'Invalid entry' })
 			}
 
 
@@ -307,12 +290,7 @@ const server = http.createServer(async (req, res) => {
 			const productTypeValue = parsedReqBody.product_type
 			if(hasProductType) {
 				if (productTypeValue !== 'beer' && productTypeValue !== 'merchandise') {
-					return sendResponse(
-							res,
-							400,
-							'application/json',
-							JSON.stringify({ message: 'Invalid product type' })
-						)
+					return sendJson(res, 400, { message: 'Invalid product type' })
 				}
 			}
 
@@ -321,12 +299,7 @@ const server = http.createServer(async (req, res) => {
 			const imgUrlValue = parsedReqBody.img_url
 			if(hasImgUrl) {
 				if (imgUrlValue !== null && (typeof imgUrlValue !== 'string' || imgUrlValue.trim().length === 0)) {
-					return sendResponse(
-							res,
-							400,
-							'application/json',
-							JSON.stringify({ message: 'Image URL must be a nonempty string or null' })
-						)
+					return sendJson(res, 400, { message: 'Image URL must be a nonempty string or null' })
 				}
 			}
 
@@ -335,12 +308,7 @@ const server = http.createServer(async (req, res) => {
 			const nameValue = parsedReqBody.name
 			if (hasName) {
 				if (typeof nameValue !== 'string' || nameValue.trim().length === 0) {
-					return sendResponse(
-							res,
-							400,
-							'application/json',
-							JSON.stringify({ message: 'Name must be a non empty string' })
-						)
+					return sendJson(res, 400, { message: 'Name must be a non empty string' })
 				}
 			}
 
@@ -350,12 +318,7 @@ const server = http.createServer(async (req, res) => {
 
 			if(hasAbv) {
 				if(abvValue !== null && (!Number.isFinite(abvValue) || abvValue < 0 || abvValue > 99)) {
-					return sendResponse(
-							res,
-							400,
-							'application/json',
-							JSON.stringify({ message: 'ABV must be a number between 0 and 99, or null' })
-						)
+					return sendJson(res, 400, { message: 'ABV must be a number between 0 and 99, or null' })
 				}
 			}
 
@@ -369,12 +332,7 @@ const server = http.createServer(async (req, res) => {
 				
 				if(fieldExists) {
 					if(value !== null && (typeof value !== 'string' || value.trim().length === 0)) {
-						return sendResponse(
-						res,
-						400,
-						'application/json',
-						JSON.stringify({ message: `${field} must be a non empty string or null` })
-					)
+						return sendJson(res, 400, { message: `${field} must be a non empty string or null` })
 					}
 				}
 			}
@@ -385,12 +343,7 @@ const server = http.createServer(async (req, res) => {
 			if (hasQuantity) {
 				const quantityValue = parsedReqBody.quantity
 				if (!Number.isInteger(quantityValue) || quantityValue < 0 || quantityValue > 2147483647) {
-					return sendResponse(
-						res,
-						400,
-						'application/json',
-						JSON.stringify({ message: 'Quantity must be an integer between 0 and 2147483647' })
-					)
+					return sendJson(res, 400, { message: 'Quantity must be an integer between 0 and 2147483647' })
 				}
 			}
 
@@ -400,12 +353,7 @@ const server = http.createServer(async (req, res) => {
 
 			if(hasUnitPrice) {
 				if(!Number.isFinite(unitPriceValue) || unitPriceValue < 0 || unitPriceValue > 99999999.99) {
-					return sendResponse(
-							res,
-							400,
-							'application/json',
-							JSON.stringify({ message: 'Unit price must be a valid number' })
-						)
+					return sendJson(res, 400, { message: 'Unit price must be a valid number' })
 				}
 			}
 
@@ -414,12 +362,7 @@ const server = http.createServer(async (req, res) => {
 			const isActiveValue = parsedReqBody.is_active
 			if (hasIsActive) {
 				if (typeof isActiveValue !== 'boolean') {
-					return sendResponse(
-						res,
-						400,
-						'application/json',
-						JSON.stringify({ message: 'Value must be true or false' })
-					)
+					return sendJson(res, 400, { message: 'Value must be true or false' })
 				}
 			}
 
@@ -442,21 +385,10 @@ const server = http.createServer(async (req, res) => {
 			const result = await pool.query(query, values)
 
 			if (result.rowCount === 0) {
-				return sendResponse(
-					res,
-					404,
-					'application/json',
-					JSON.stringify({ message: 'ID not found' })
-				)
+				return sendJson(res, 404, { message: 'ID not found' })
 			}
 
-			return sendResponse(
-				res,
-				200,
-				'application/json',
-				JSON.stringify({message: 'Product updated successfully',product: result.rows[0]})
-			)
-
+			return sendJson(res, 200, {message: 'Product updated successfully',product: result.rows[0]})
 
 		}
 
@@ -470,24 +402,14 @@ const server = http.createServer(async (req, res) => {
 
 			//----------------------------------------------------------//
 			if (!ADMIN_API_KEY || req.headers['x-admin-key'] !== ADMIN_API_KEY) {
-				return sendResponse(
-				res,
-				403,
-				'application/json',
-				JSON.stringify({ message: 'Admin access required' })
-				)
+				return sendJson(res, 403, { message: 'Admin access required' })
 			}
 			//----------------------------------------------------------//
 
 			const id = Number(req.url.split('/').pop())
 
 			if (!Number.isInteger(id) || id <= 0) {
-				return sendResponse(
-					res,
-					400,
-					'application/json',
-					JSON.stringify({ message: 'ID must be a positive integer' })
-				)
+				return sendJson(res, 400, { message: 'ID must be a positive integer' })
 			}
 	
 			let result
@@ -501,12 +423,7 @@ const server = http.createServer(async (req, res) => {
 
 			} catch (err) {
 				if (err.code === '23503') {
-					return sendResponse(
-						res,
-						409,
-						'application/json',
-						JSON.stringify({message: 'This product is referenced by an order and cannot be deleted.'})
-					)
+					return sendJson(res, 409, {message: 'This product is referenced by an order and cannot be deleted.'})
 				}
 
 				throw err
@@ -515,12 +432,7 @@ const server = http.createServer(async (req, res) => {
 
 			
 			if(result.rowCount === 0 ) {
-				return sendResponse(
-					res,
-					404,
-					'application/json',
-					JSON.stringify({ message: 'ID not found' })
-				)
+				return sendJson(res, 404, { message: 'ID not found' })
 			}
 
 
