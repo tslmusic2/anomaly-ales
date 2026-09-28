@@ -60,7 +60,9 @@ const server = http.createServer(async (req, res) => {
 		}
 
 
-//------------------------------POST Handler------------------------------------------------//
+
+
+//------------------------------POST USER ORDERS Handler------------------------------------------------//
 		if (req.url === '/api/orders' && req.method === 'POST') {
 
 
@@ -209,21 +211,23 @@ const server = http.createServer(async (req, res) => {
 				const orderItemsResult = await client.query(`
 					SELECT inventory_id, item_name, selected_size, packaging_type, quantity, unit_price, quantity * unit_price AS item_total
 					FROM order_items
-						WHERE order_id = $1;
-						ORDER BY id
+						WHERE order_id = $1
+						ORDER BY id;
 					`, [newOrder.id])
 
 				const orderItems = orderItemsResult.rows
 
 				//gets the order total
-				const orderTotal = await client.query(`
-					SELECT SUM()
-					`)
+				const orderTotalResult = await client.query(`
+					SELECT SUM(quantity * unit_price) AS order_total FROM order_items
+					  WHERE order_id = $1;
+					`, [newOrder.id])
 
+				const orderTotal = orderTotalResult.rows[0].order_total
 
 				await client.query('COMMIT')
 
-				return sendJson(res, 201, {message: 'Order was created successfully', order: finalOrder})
+				return sendJson(res, 201, {message: 'Order was created successfully', order: newOrder, orderItems, orderTotal})
 
 			} catch(err) {
 				await client.query('ROLLBACK')
@@ -284,7 +288,7 @@ const server = http.createServer(async (req, res) => {
 				return sendJson(res, 400, { message: 'Invalid entry' })
 			}
 
-
+//-----//-----///-----//------/-----//---Make utility for the Object.hasOwns ----//-----//-----//
 			//PRODUCT_TYPE  validates the product is beer or merchandise
 			const hasProductType = Object.hasOwn(parsedReqBody, 'product_type')
 			const productTypeValue = parsedReqBody.product_type
@@ -321,7 +325,7 @@ const server = http.createServer(async (req, res) => {
 					return sendJson(res, 400, { message: 'ABV must be a number between 0 and 99, or null' })
 				}
 			}
-
+//------///--------//-------//------//-------//------//------//-------//
 
 			//validates beer_style, packaging_type, size   
 			const stylePackSizeArr = ['beer_style', 'packaging_type', 'size']
@@ -439,6 +443,117 @@ const server = http.createServer(async (req, res) => {
 			return sendJson(res, 200, {message: 'Product deleted successfully'})
 
 		}
+
+
+
+
+//------------------------------POST ADMIN INVENTORY Handler------------------------------------------------//
+		if (req.url === '/api/inventory' && req.method === 'POST') {
+
+			//----------------------------------------------------------//
+			if (!ADMIN_API_KEY || req.headers['x-admin-key'] !== ADMIN_API_KEY) {
+				return sendJson(res, 403, { message: 'Admin access required' })
+			}
+			//----------------------------------------------------------//
+
+
+			//validate that its proper json and contains something
+			let parsedReqBody
+			try {
+				parsedReqBody = await getRequestBody(req)
+
+				if (parsedReqBody === null || typeof parsedReqBody !== 'object' || Array.isArray(parsedReqBody)) {
+					return sendJson(res, 400, {message: 'Request body must contain valid JSON'})
+				}
+
+			} catch(err) {
+				if (err instanceof SyntaxError) {
+					return sendJson(res, 400, {message: 'Request body must contain valid JSON'})
+				}
+
+				throw err
+			}
+
+
+			const allowedFields = ['product_type', 'img_url', 'name', 'beer_style', 'abv', 'packaging_type', 'size', 'quantity', 'unit_price', 'is_active']
+			const requiredFields = ['product_type', 'name', 'quantity', 'unit_price']
+			
+
+			for (const field of requiredFields) {
+				const validField = Object.hasOwn(parsedReqBody, field)
+
+				if (!validField) {
+					return sendJson(res, 400, {message: `${field} is required`})
+				}
+			}
+			
+			const parsedReqArr = Object.keys(parsedReqBody)
+
+			for (const field of parsedReqArr) {
+				const allowedValue = allowedFields.includes(field)
+			
+				if (!allowedValue) {
+					return sendJson(res, 400, {message: `${field} is not an allowed inventory field`})
+				}
+
+			}
+
+
+				//'product_type', 
+			if (parsedReqBody.product_type !== 'beer' && parsedReqBody.product_type !== 'merchandise') {
+				return sendJson(res, 400, {message: 'product_type must be beer or merchandise'})
+			}
+
+				// 'name', 
+			if (typeof parsedReqBody.name !== 'string' || parsedReqBody.name.trim().length === 0) {
+				return sendJson(res, 400, {message: 'name must be a non empty string'})
+			}
+
+
+				// 'quantity', 
+			if (!Number.isInteger(parsedReqBody.quantity) || parsedReqBody.quantity < 0 || parsedReqBody.quantity > 2147483647) {
+				return sendJson(res, 400, {message: 'quantity must be an integer between 0 and 2147483647'})
+			}
+
+
+
+				// 'unit_price'
+			if (!Number.isFinite(parsedReqBody.unit_price) || parsedReqBody.unit_price < 0 || parsedReqBody.unit_price > 99999999.99) {
+				return sendJson(res, 400, {message: 'unit_price must be a number between 0 and 99999999.99'})
+			}
+
+			//img_url
+
+
+
+			//'beer_style','packaging_type', 'size'
+			
+
+
+			// 'abv', 
+
+
+
+			//is_active
+			const hasIsActive = Object.hasOwn(parsedReqBody, 'is_active')
+			if (!hasIsActive) {
+				if (typeof parsedReqBody.is_active !== 'boolean') {
+					return sendJson(res, 400, {message: 'must be true or false'})
+				}
+			}
+			
+			
+			
+				
+
+
+			
+			
+
+		}
+		//------------------------------------------------------------------
+
+
 
 		return sendJson(res, 404, { message: 'Route not found' })
 
