@@ -1,27 +1,22 @@
-import path from 'node:path'
-import fs from 'node:fs/promises'
 import http from 'node:http'
 import { pool } from './utilities/database.js'
-import { sendResponse, sendJson } from './utilities/responses.js'
+import { sendJson } from './utilities/responses.js'
 import { getRequestBody } from './utilities/getRequestBody.js'
 
 
 const PORT = 8004
 
-const __dirname = import.meta.dirname
-const inventoryFilePath = path.join(__dirname, 'data', 'inventory.json')
-const ordersFilePath = path.join(__dirname, 'data', 'orders.json')
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY
+if (!ADMIN_API_KEY) {
+    throw new Error('ADMIN_API_KEY is missing')
+}
 
 
 const result = await pool.query(
     'SELECT current_database() AS database_name'
 )
 
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY
 
-if (!ADMIN_API_KEY) {
-    throw new Error('ADMIN_API_KEY is missing')
-}
 
 console.log('Connected to database:', result.rows[0].database_name)
 
@@ -51,12 +46,7 @@ const server = http.createServer(async (req, res) => {
 
 			const inventory = result.rows
 
-			return sendResponse(
-				res,
-				200,
-				'application/json',
-				JSON.stringify(inventory)
-			)
+			return sendJson(res, 200, inventory)
 		}
 
 
@@ -392,7 +382,7 @@ const server = http.createServer(async (req, res) => {
 				return sendJson(res, 404, { message: 'ID not found' })
 			}
 
-			return sendJson(res, 200, {message: 'Product updated successfully',product: result.rows[0]})
+			return sendJson(res, 201, {message: 'Product updated successfully',product: result.rows[0]})
 
 		}
 
@@ -522,27 +512,62 @@ const server = http.createServer(async (req, res) => {
 				return sendJson(res, 400, {message: 'unit_price must be a number between 0 and 99999999.99'})
 			}
 
-			//img_url
+				//img_url
+			const hasImg = Object.hasOwn(parsedReqBody, 'img_url')
+			if (hasImg) {
+				if (parsedReqBody.img_url !== null && (typeof parsedReqBody.img_url !== 'string' || parsedReqBody.img_url.trim().length === 0)) {
+					return sendJson(res, 400, {message: 'img_url must be a non empty string or null'})
+				}
 
+			}
 
-
-			//'beer_style','packaging_type', 'size'
+				//'beer_style','packaging_type', 'size'
+			const stylePackSize = ['beer_style','packaging_type', 'size']
 			
+			for (const field of stylePackSize) {
+				const hasField = Object.hasOwn(parsedReqBody, field)
+				const value = parsedReqBody[field]
+				if (hasField) {
+					if (value !== null && (typeof value !== 'string' || value.trim().length === 0)) {
+						return sendJson(res, 400, {message: `${field} must be a non empty string or null`})
+					}
+				}
+			}
 
-
-			// 'abv', 
-
-
+				// 'abv', 
+			const hasAbv = Object.hasOwn(parsedReqBody, 'abv')
+			if (hasAbv) {
+				if (parsedReqBody.abv !== null && (!Number.isFinite(parsedReqBody.abv) || parsedReqBody.abv < 0 || parsedReqBody.abv > 99)) {
+					return sendJson(res, 400, {message: 'abv must be a number between 0 and 99 or null'})
+				}
+			}
 
 			//is_active
 			const hasIsActive = Object.hasOwn(parsedReqBody, 'is_active')
-			if (!hasIsActive) {
+			if (hasIsActive) {
 				if (typeof parsedReqBody.is_active !== 'boolean') {
-					return sendJson(res, 400, {message: 'must be true or false'})
+					return sendJson(res, 400, {message: 'is_active must be true or false'})
 				}
 			}
 			
+			//-------SQL for adding the product to database-------//
+
+			const insertFields = parsedReqArr.join(', ')
+			const placeholders = parsedReqArr.map((field, index) => `$${index + 1}`).join(', ')
+			const insertValues = Object.values(parsedReqBody)
+			    //OR USE const insertValues = parsedReqArr.map(field => parsedReqBody[field])
+
+			const result = await pool.query(`
+				INSERT INTO inventory (
+					${insertFields}
+				) VALUES (
+				 	${placeholders}
+				)
+				RETURNING * ;`, insertValues)
+
+				const resultRows = result.rows[0]
 			
+			return sendJson(res, 201, {message: 'Inventory added successfully', product: resultRows})
 			
 				
 
